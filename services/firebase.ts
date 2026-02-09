@@ -1,6 +1,7 @@
 
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // Helper per gestire l'accesso alle variabili d'ambiente in modo sicuro nel browser
 const getSafeEnv = (key: string): string => {
@@ -29,6 +30,7 @@ const firebaseConfig = {
 };
 
 let db: any = null;
+let storage: any = null;
 
 // Verifica se la configurazione è valida (almeno il Project ID deve esserci)
 const isConfigValid = !!firebaseConfig.projectId && firebaseConfig.projectId !== "undefined" && firebaseConfig.projectId !== "";
@@ -37,7 +39,8 @@ try {
   if (isConfigValid) {
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     db = getFirestore(app);
-    console.log("Firebase Arena initialized.");
+    storage = getStorage(app);
+    console.log("Firebase Arena initialized with Firestore and Storage.");
   } else {
     console.warn("Firebase: Configurazione mancante. L'app userà i dati locali (DEFAULT_CONFIG). Assicurati di aver impostato le Environment Variables su Vercel.");
   }
@@ -45,4 +48,4 @@ try {
   console.error("Firebase Initialization Error:", error);
 }
 
-export { db };
+export { db, storage };

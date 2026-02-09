@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSite } from '../context/SiteContext';
-import { SiteConfig } from '../types';
+import { SiteConfig, SiteEvent } from '../types';
+import { storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const POSSIBLE_SLOTS = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
@@ -13,7 +15,13 @@ const AdminPanel: React.FC = () => {
   const { config, updateConfig, setAdmin } = useSite();
   const [tempConfig, setTempConfig] = useState<SiteConfig | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'courts' | 'schedules' | 'events'>('home');
-  const [newImgUrl, setNewImgUrl] = useState('');
+  const [uploading, setUploading] = useState({ tennis: false, padel: false });
+
+  // State per la gestione degli eventi
+  const [newEvent, setNewEvent] = useState({ title: '', date: '', description: '', category: '' });
+  const [newEventImage, setNewEventImage] = useState<File | null>(null);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
+
 
   useEffect(() => {
     if (config) setTempConfig(JSON.parse(JSON.stringify(config)));
@@ -22,19 +30,38 @@ const AdminPanel: React.FC = () => {
   if (!tempConfig) return <div className="p-20 text-center font-bold text-[#5C6B89]">Inizializzazione Dashboard...</div>;
 
   const handleSave = async () => {
+    if (!tempConfig) return;
     await updateConfig(tempConfig);
     alert('Configurazione Arena salvata con successo!');
   };
 
-  const addImage = (type: 'tennis' | 'padel') => {
-    if (!newImgUrl) return;
-    setTempConfig(prev => {
-      if (!prev) return null;
-      const updated = { ...prev };
-      updated.courts[type].imageUrls = [...updated.courts[type].imageUrls, newImgUrl];
-      return updated;
-    });
-    setNewImgUrl('');
+  const handleImageUpload = async (file: File, type: 'tennis' | 'padel') => {
+    if (!file || !storage) {
+        alert("Servizio di archiviazione non disponibile. Controlla la configurazione di Firebase.");
+        return;
+    }
+
+    setUploading(prev => ({ ...prev, [type]: true }));
+    
+    try {
+        const timestamp = Date.now();
+        const storageRef = ref(storage, `courts/${type}/${timestamp}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        setTempConfig(prev => {
+            if (!prev) return null;
+            const updated = { ...prev };
+            updated.courts[type].imageUrls = [...updated.courts[type].imageUrls, downloadURL];
+            return updated;
+        });
+
+    } catch (error) {
+        console.error("Upload Error:", error);
+        alert("Errore durante il caricamento dell'immagine.");
+    } finally {
+        setUploading(prev => ({ ...prev, [type]: false }));
+    }
   };
 
   const removeImage = (type: 'tennis' | 'padel', index: number) => {
@@ -58,10 +85,7 @@ const AdminPanel: React.FC = () => {
             ? c.slots.filter((s: string) => s !== slot) 
             : [...c.slots, slot];
           
-          return {
-            ...c,
-            slots: newSlots.sort((a: string, b: string) => a.localeCompare(b))
-          };
+          return { ...c, slots: newSlots.sort((a: string, b: string) => a.localeCompare(b)) };
         }
         return c;
       });
@@ -71,6 +95,45 @@ const AdminPanel: React.FC = () => {
       return updated;
     });
   };
+
+  const handleAddEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEvent.title || !newEvent.date || !newEventImage) {
+        alert("Titolo, data e immagine sono obbligatori per creare un evento.");
+        return;
+    }
+    setIsAddingEvent(true);
+    try {
+        const timestamp = Date.now();
+        const storageRef = ref(storage, `events/${timestamp}_${newEventImage.name}`);
+        const snapshot = await uploadBytes(storageRef, newEventImage);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        const eventToAdd: SiteEvent = {
+            id: `event_${timestamp}`,
+            ...newEvent,
+            imageUrl: downloadURL,
+        };
+        
+        setTempConfig(prev => prev ? ({ ...prev, events: [...prev.events, eventToAdd] }) : null);
+        
+        setNewEvent({ title: '', date: '', description: '', category: '' });
+        setNewEventImage(null);
+        const fileInput = document.getElementById('event-image-upload') as HTMLInputElement;
+        if(fileInput) fileInput.value = '';
+
+    } catch (error) {
+        console.error("Error adding event:", error);
+        alert("Si è verificato un errore durante l'aggiunta dell'evento.");
+    } finally {
+        setIsAddingEvent(false);
+    }
+  };
+
+  const removeEvent = (eventId: string) => {
+      setTempConfig(prev => prev ? ({ ...prev, events: prev.events.filter(e => e.id !== eventId) }) : null);
+  };
+
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-24 pb-20 px-4 md:px-8">
@@ -143,14 +206,24 @@ const AdminPanel: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex items-center gap-4">
+                      <label htmlFor={`file-upload-${type}`} className="flex-1 cursor-pointer">
+                        <div className="w-full text-center p-5 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 hover:border-[#5C6B89] hover:text-[#5C6B89] transition">
+                          <i className="fas fa-cloud-upload-alt mr-2"></i>
+                          <span className="text-sm font-bold">
+                            {uploading[type] ? 'CARICAMENTO...' : 'CLICCA PER CARICARE'}
+                          </span>
+                        </div>
+                      </label>
                       <input 
-                        className="flex-1 p-5 bg-white rounded-2xl border-none text-sm" 
-                        placeholder="Incolla URL Immagine..."
-                        value={newImgUrl}
-                        onChange={e => setNewImgUrl(e.target.value)}
+                        id={`file-upload-${type}`}
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        className="hidden"
+                        disabled={uploading[type]}
+                        onChange={(e) => { if (e.target.files && e.target.files[0]) { handleImageUpload(e.target.files[0], type); } }}
                       />
-                      <button onClick={() => addImage(type)} className="bg-[#5C6B89] text-white px-8 py-4 rounded-2xl font-black shadow-lg">AGGIUNGI</button>
+                      {uploading[type] && <div className="loader"></div>}
                     </div>
                   </div>
                 ))}
@@ -160,14 +233,10 @@ const AdminPanel: React.FC = () => {
             {activeTab === 'schedules' && (
               <div className="space-y-12 animate-in fade-in duration-500">
                 <h2 className="text-3xl font-black text-[#5C6B89] mb-4 uppercase tracking-tighter">Programmazione Oraria</h2>
-                <p className="text-gray-400 text-sm mb-10">Seleziona gli slot orari attivi per ogni singolo campo. Gli utenti vedranno solo gli slot selezionati qui.</p>
-                
+                <p className="text-gray-400 text-sm mb-10">Seleziona gli slot orari attivi per ogni singolo campo.</p>
                 {[...tempConfig.courts.tennis.individualCourts, ...tempConfig.courts.padel.individualCourts].map(court => (
                   <div key={court.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 mb-8">
-                    <div className="flex justify-between items-center mb-8">
-                      <h4 className="text-xl font-black text-[#5C6B89] uppercase tracking-tighter">{court.name}</h4>
-                      <span className="text-[10px] font-black bg-white px-4 py-1.5 rounded-full shadow-sm text-gray-400 tracking-widest uppercase">{court.id}</span>
-                    </div>
+                    <h4 className="text-xl font-black text-[#5C6B89] uppercase tracking-tighter mb-8">{court.name}</h4>
                     <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-10 gap-2">
                       {POSSIBLE_SLOTS.map(slot => (
                         <button 
@@ -185,8 +254,53 @@ const AdminPanel: React.FC = () => {
             )}
             
             {activeTab === 'events' && (
-              <div className="p-8 text-center text-gray-400 font-bold italic">
-                Gestione Eventi disponibile a breve.
+              <div className="animate-in fade-in duration-500">
+                <h2 className="text-3xl font-black text-[#5C6B89] mb-10 border-b pb-6 uppercase tracking-tighter">Gestione Eventi</h2>
+                
+                {/* Lista Eventi Esistenti */}
+                <div className="mb-12">
+                  <h3 className="text-xl font-bold text-[#5C6B89] mb-6">Eventi Attuali</h3>
+                  <div className="space-y-4">
+                    {tempConfig.events.length > 0 ? tempConfig.events.map(event => (
+                      <div key={event.id} className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <img src={event.imageUrl} className="w-16 h-16 object-cover rounded-xl" alt={event.title} />
+                          <div>
+                            <p className="font-bold text-gray-800">{event.title}</p>
+                            <p className="text-xs text-gray-400">{event.date} - {event.category}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => removeEvent(event.id)} className="bg-red-50 text-red-500 w-10 h-10 rounded-full hover:bg-red-100 transition">
+                          <i className="fas fa-trash-alt text-sm"></i>
+                        </button>
+                      </div>
+                    )) : <p className="text-gray-400 italic text-sm">Nessun evento presente.</p>}
+                  </div>
+                </div>
+
+                {/* Form Aggiunta Evento */}
+                <div className="bg-gray-50 p-8 rounded-[2.5rem]">
+                   <h3 className="text-xl font-bold text-[#5C6B89] mb-8 uppercase tracking-tight">Aggiungi Nuovo Evento</h3>
+                   <form onSubmit={handleAddEvent} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <input value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} placeholder="Titolo Evento" className="w-full p-4 bg-white rounded-xl border-none font-medium" required/>
+                        <input value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} placeholder="Data (es. 24 Giugno 2024)" className="w-full p-4 bg-white rounded-xl border-none font-medium" required/>
+                        <input value={newEvent.category} onChange={e => setNewEvent({...newEvent, category: e.target.value})} placeholder="Categoria (es. Torneo)" className="w-full p-4 bg-white rounded-xl border-none font-medium" />
+                        <textarea value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} placeholder="Breve descrizione..." rows={3} className="md:col-span-2 w-full p-4 bg-white rounded-xl border-none font-medium"/>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label htmlFor="event-image-upload" className="flex-1 cursor-pointer">
+                          <div className="w-full text-center p-4 bg-white rounded-xl border-2 border-dashed text-sm font-bold text-gray-400 hover:border-[#5C6B89] hover:text-[#5C6B89]">
+                            {newEventImage ? `File: ${newEventImage.name}` : 'CARICA IMMAGINE EVENTO'}
+                          </div>
+                        </label>
+                        <input id="event-image-upload" type="file" accept="image/*" onChange={e => e.target.files && setNewEventImage(e.target.files[0])} className="hidden" />
+                      </div>
+                      <button type="submit" disabled={isAddingEvent} className="w-full bg-[#A8D695] text-white py-4 rounded-xl font-black hover:bg-[#97c584] transition disabled:bg-gray-300">
+                        {isAddingEvent ? 'AGGIUNGENDO...' : 'AGGIUNGI EVENTO'}
+                      </button>
+                   </form>
+                </div>
               </div>
             )}
           </div>
