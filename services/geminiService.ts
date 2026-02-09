@@ -18,7 +18,12 @@ Sii cordiale, professionale e usa un tono sportivo e moderno. Rispondi sempre in
 
 export const getGeminiResponse = async (userPrompt: string) => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
+    if (!apiKey) {
+      return "Configurazione AI mancante. Contatta l'amministratore.";
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: userPrompt,

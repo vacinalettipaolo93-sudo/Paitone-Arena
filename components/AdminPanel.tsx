@@ -1,301 +1,183 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSite } from '../context/SiteContext';
-import { SiteEvent, SiteConfig } from '../types';
+import { SiteConfig } from '../types';
+
+const POSSIBLE_SLOTS = [
+  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+  "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
+  "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00", "22:30"
+];
 
 const AdminPanel: React.FC = () => {
   const { config, updateConfig, setAdmin } = useSite();
-  // Creiamo una copia profonda per evitare mutazioni indesiderate durante l'editing
-  const [tempConfig, setTempConfig] = useState<SiteConfig>(JSON.parse(JSON.stringify(config)));
-  const [activeTab, setActiveTab] = useState<'home' | 'courts' | 'events' | 'footer'>('home');
+  const [tempConfig, setTempConfig] = useState<SiteConfig | null>(null);
+  const [activeTab, setActiveTab] = useState<'home' | 'courts' | 'schedules' | 'events'>('home');
+  const [newImgUrl, setNewImgUrl] = useState('');
 
-  const handleSave = () => {
-    updateConfig(tempConfig);
-    alert('Sito aggiornato con successo! Le modifiche sono ora live.');
+  useEffect(() => {
+    if (config) setTempConfig(JSON.parse(JSON.stringify(config)));
+  }, [config]);
+
+  if (!tempConfig) return <div className="p-20 text-center font-bold text-[#5C6B89]">Inizializzazione Dashboard...</div>;
+
+  const handleSave = async () => {
+    await updateConfig(tempConfig);
+    alert('Configurazione Arena salvata con successo!');
   };
 
-  const addEvent = () => {
-    const newEvent: SiteEvent = {
-      id: Date.now().toString(),
-      title: "Nuovo Evento",
-      date: "Data da definire",
-      description: "Inserisci qui i dettagli dell'evento...",
-      imageUrl: "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80&w=800",
-      category: "Torneo"
-    };
-    setTempConfig(prev => ({
-      ...prev,
-      events: [...(prev.events || []), newEvent]
-    }));
+  const addImage = (type: 'tennis' | 'padel') => {
+    if (!newImgUrl) return;
+    setTempConfig(prev => {
+      if (!prev) return null;
+      const updated = { ...prev };
+      updated.courts[type].imageUrls = [...updated.courts[type].imageUrls, newImgUrl];
+      return updated;
+    });
+    setNewImgUrl('');
   };
 
-  const deleteEvent = (id: string) => {
-    if(window.confirm('Sei sicuro di voler eliminare questo evento?')) {
-      setTempConfig(prev => ({
-        ...prev,
-        events: prev.events.filter(e => e.id !== id)
-      }));
-    }
+  const removeImage = (type: 'tennis' | 'padel', index: number) => {
+    setTempConfig(prev => {
+      if (!prev) return null;
+      const updated = { ...prev };
+      updated.courts[type].imageUrls = updated.courts[type].imageUrls.filter((_, i) => i !== index);
+      return updated;
+    });
   };
 
-  const updateEvent = (id: string, updates: Partial<SiteEvent>) => {
-    setTempConfig(prev => ({
-      ...prev,
-      events: prev.events.map(e => e.id === id ? { ...e, ...updates } : e)
-    }));
+  const toggleSlot = (courtId: string, slot: string) => {
+    setTempConfig(prev => {
+      if (!prev) return null;
+      const updated = { ...prev };
+      const findAndToggle = (courts: any[]) => courts.map(c => {
+        if (c.id === courtId) {
+          const hasSlot = c.slots.includes(slot);
+          return {
+            ...c,
+            slots: hasSlot ? c.slots.filter((s: string) => s !== slot) : [...c.slots, slot].sort()
+          };
+        }
+        return c;
+      });
+
+      updated.courts.tennis.individualCourts = findAndToggle(updated.courts.tennis.individualCourts);
+      updated.courts.padel.individualCourts = findAndToggle(updated.courts.padel.individualCourts);
+      return updated;
+    });
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pt-24">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-[#5C6B89] rounded-2xl flex items-center justify-center text-white shadow-lg">
-              <i className="fas fa-tools text-xl"></i>
+    <div className="min-h-screen bg-[#f8fafc] pt-24 pb-20 px-4 md:px-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm">
+          <div className="flex items-center space-x-6">
+            <div className="w-16 h-16 bg-[#5C6B89] rounded-3xl flex items-center justify-center text-white shadow-xl">
+              <i className="fas fa-sliders-h text-2xl"></i>
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-[#5C6B89]">Dashboard</h1>
-              <p className="text-gray-400 text-sm">Gestione Paitone Arena</p>
+              <h1 className="text-4xl font-black text-[#5C6B89] tracking-tighter">ADMIN ARENA</h1>
+              <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">Gestione Campi & Orari</p>
             </div>
           </div>
-          <button 
-            onClick={() => setAdmin(false)}
-            className="bg-white text-red-500 px-6 py-3 rounded-2xl font-bold shadow-sm hover:shadow-md transition border border-red-50"
-          >
-            Torna al Sito
-          </button>
+          <div className="flex space-x-4">
+            <button onClick={handleSave} className="bg-[#A8D695] text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-[#A8D695]/20 hover:scale-105 transition">SALVA TUTTO</button>
+            <button onClick={() => setAdmin(false)} className="bg-white text-red-500 border border-red-50 px-8 py-4 rounded-2xl font-black shadow-sm hover:bg-red-50 transition">ESCI</button>
+          </div>
         </div>
 
-        <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[700px]">
-          {/* Sidebar Nav */}
-          <div className="w-full md:w-72 bg-gray-50 border-r border-gray-100 p-8 flex flex-col space-y-3">
-            <button 
-              onClick={() => setActiveTab('home')}
-              className={`text-left p-4 rounded-2xl font-bold transition flex items-center ${activeTab === 'home' ? 'bg-[#5C6B89] text-white shadow-xl' : 'text-gray-400 hover:bg-white hover:text-[#5C6B89]'}`}
-            >
-              <i className="fas fa-home w-8"></i> Home & Hero
-            </button>
-            <button 
-              onClick={() => setActiveTab('courts')}
-              className={`text-left p-4 rounded-2xl font-bold transition flex items-center ${activeTab === 'courts' ? 'bg-[#5C6B89] text-white shadow-xl' : 'text-gray-400 hover:bg-white hover:text-[#5C6B89]'}`}
-            >
-              <i className="fas fa-table-tennis w-8"></i> Campi & Foto
-            </button>
-            <button 
-              onClick={() => setActiveTab('events')}
-              className={`text-left p-4 rounded-2xl font-bold transition flex items-center ${activeTab === 'events' ? 'bg-[#5C6B89] text-white shadow-xl' : 'text-gray-400 hover:bg-white hover:text-[#5C6B89]'}`}
-            >
-              <i className="fas fa-calendar-alt w-8"></i> Eventi
-            </button>
-            <button 
-              onClick={() => setActiveTab('footer')}
-              className={`text-left p-4 rounded-2xl font-bold transition flex items-center ${activeTab === 'footer' ? 'bg-[#5C6B89] text-white shadow-xl' : 'text-gray-400 hover:bg-white hover:text-[#5C6B89]'}`}
-            >
-              <i className="fas fa-info-circle w-8"></i> Contatti
-            </button>
-            
-            <div className="mt-auto pt-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar */}
+          <div className="w-full lg:w-80 space-y-3">
+            {[
+              { id: 'home', icon: 'fa-home', label: 'Dashboard Hero' },
+              { id: 'courts', icon: 'fa-images', label: 'Gallery Campi' },
+              { id: 'schedules', icon: 'fa-clock', label: 'Orari Campi' },
+              { id: 'events', icon: 'fa-calendar-star', label: 'Eventi' }
+            ].map(tab => (
               <button 
-                onClick={handleSave}
-                className="w-full bg-[#A8D695] text-white py-5 rounded-[1.5rem] font-black shadow-lg hover:bg-[#97c584] transition-all transform hover:-translate-y-1 uppercase tracking-widest text-sm"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`w-full text-left p-6 rounded-3xl font-black transition-all flex items-center ${activeTab === tab.id ? 'bg-[#5C6B89] text-white shadow-2xl transform -translate-y-1' : 'bg-white text-gray-400 hover:text-[#5C6B89]'}`}
               >
-                Salva Modifiche
+                <i className={`fas ${tab.icon} w-10 text-xl`}></i> {tab.label.toUpperCase()}
               </button>
-            </div>
+            ))}
           </div>
 
-          {/* Edit Content */}
-          <div className="flex-1 p-6 md:p-12 overflow-y-auto max-h-[800px] bg-white">
+          {/* Main Content */}
+          <div className="flex-1 bg-white rounded-[3rem] shadow-sm p-10 border border-gray-100">
             {activeTab === 'home' && (
-              <div className="space-y-8 animate-in fade-in duration-300">
-                <div className="border-b border-gray-100 pb-4">
-                  <h2 className="text-2xl font-bold text-[#5C6B89]">Home & Visual</h2>
-                  <p className="text-gray-400 text-sm">Modifica i testi principali e l'immagine di apertura</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Titolo Arena</label>
-                    <input 
-                      type="text" 
-                      value={tempConfig.hero.title}
-                      onChange={(e) => setTempConfig(prev => ({...prev, hero: {...prev.hero, title: e.target.value}}))}
-                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none font-bold"
-                    />
+              <div className="space-y-8 animate-in fade-in duration-500">
+                <h2 className="text-3xl font-black text-[#5C6B89] mb-10 border-b pb-6 uppercase tracking-tighter">Hero Section</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Titolo Principale</label>
+                    <input className="w-full p-5 bg-gray-50 rounded-2xl border-none font-bold" value={tempConfig.hero.title} onChange={e => setTempConfig({...tempConfig, hero: {...tempConfig.hero, title: e.target.value}})}/>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Parola Evidenziata</label>
-                    <input 
-                      type="text" 
-                      value={tempConfig.hero.highlight}
-                      onChange={(e) => setTempConfig(prev => ({...prev, hero: {...prev.hero, highlight: e.target.value}}))}
-                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none font-bold text-[#A8D695]"
-                    />
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Highlight</label>
+                    <input className="w-full p-5 bg-gray-50 rounded-2xl border-none font-bold text-[#A8D695]" value={tempConfig.hero.highlight} onChange={e => setTempConfig({...tempConfig, hero: {...tempConfig.hero, highlight: e.target.value}})}/>
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Sottotitolo Introduzione</label>
-                    <textarea 
-                      rows={3}
-                      value={tempConfig.hero.subtitle}
-                      onChange={(e) => setTempConfig(prev => ({...prev, hero: {...prev.hero, subtitle: e.target.value}}))}
-                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">URL Immagine Hero</label>
-                    <input 
-                      type="text" 
-                      value={tempConfig.hero.imageUrl}
-                      onChange={(e) => setTempConfig(prev => ({...prev, hero: {...prev.hero, imageUrl: e.target.value}}))}
-                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none text-blue-500 text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-8 border-t border-gray-100">
-                  <h3 className="font-bold text-gray-700 mb-6 flex items-center">
-                    <i className="fas fa-chart-line mr-3 text-[#A8D695]"></i> Statistiche Rapide
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-bold text-gray-400 mb-1 uppercase">Tennis</label>
-                      <input type="text" value={tempConfig.stats.tennis} onChange={(e) => setTempConfig(prev => ({...prev, stats: {...prev.stats, tennis: e.target.value}}))} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-center"/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-gray-400 mb-1 uppercase">Padel</label>
-                      <input type="text" value={tempConfig.stats.padel} onChange={(e) => setTempConfig(prev => ({...prev, stats: {...prev.stats, padel: e.target.value}}))} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-center"/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-gray-400 mb-1 uppercase">Soci</label>
-                      <input type="text" value={tempConfig.stats.members} onChange={(e) => setTempConfig(prev => ({...prev, stats: {...prev.stats, members: e.target.value}}))} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-center"/>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-gray-400 mb-1 uppercase">Maestri</label>
-                      <input type="text" value={tempConfig.stats.coaches} onChange={(e) => setTempConfig(prev => ({...prev, stats: {...prev.stats, coaches: e.target.value}}))} className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl font-black text-center"/>
-                    </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sottotitolo</label>
+                    <textarea rows={3} className="w-full p-5 bg-gray-50 rounded-2xl border-none" value={tempConfig.hero.subtitle} onChange={e => setTempConfig({...tempConfig, hero: {...tempConfig.hero, subtitle: e.target.value}})}/>
                   </div>
                 </div>
               </div>
             )}
 
             {activeTab === 'courts' && (
-              <div className="space-y-10 animate-in fade-in duration-300">
-                <div className="border-b border-gray-100 pb-4">
-                  <h2 className="text-2xl font-bold text-[#5C6B89]">Campi & Strutture</h2>
-                  <p className="text-gray-400 text-sm">Aggiorna le descrizioni tecniche e le foto dei campi</p>
-                </div>
-
-                <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100">
-                  <h3 className="font-bold text-lg mb-6 text-[#5C6B89]">Sezione Tennis</h3>
-                  <div className="space-y-4">
-                    <input placeholder="Titolo Sezione" value={tempConfig.courts.tennis.title} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, tennis: {...prev.courts.tennis, title: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl"/>
-                    <textarea placeholder="Descrizione Tecnica" rows={3} value={tempConfig.courts.tennis.description} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, tennis: {...prev.courts.tennis, description: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl"/>
-                    <input placeholder="URL Immagine" value={tempConfig.courts.tennis.imageUrl} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, tennis: {...prev.courts.tennis, imageUrl: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-xs text-blue-500"/>
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100">
-                  <h3 className="font-bold text-lg mb-6 text-[#A8D695]">Sezione Padel</h3>
-                  <div className="space-y-4">
-                    <input placeholder="Titolo Sezione" value={tempConfig.courts.padel.title} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, padel: {...prev.courts.padel, title: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl"/>
-                    <textarea placeholder="Descrizione Tecnica" rows={3} value={tempConfig.courts.padel.description} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, padel: {...prev.courts.padel, description: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl"/>
-                    <input placeholder="URL Immagine" value={tempConfig.courts.padel.imageUrl} onChange={(e) => setTempConfig(prev => ({...prev, courts: {...prev.courts, padel: {...prev.courts.padel, imageUrl: e.target.value}}}))} className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-xs text-blue-500"/>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'events' && (
-              <div className="space-y-8 animate-in fade-in duration-300">
-                <div className="flex justify-between items-center border-b border-gray-100 pb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-[#5C6B89]">Gestione Eventi</h2>
-                    <p className="text-gray-400 text-sm">Aggiungi o rimuovi tornei e corsi</p>
-                  </div>
-                  <button 
-                    onClick={addEvent}
-                    className="bg-[#A8D695] text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:scale-105 transition flex items-center"
-                  >
-                    <i className="fas fa-plus mr-2"></i> AGGIUNGI EVENTO
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 gap-8">
-                  {tempConfig.events.length === 0 ? (
-                    <p className="text-center py-10 text-gray-400 italic">Nessun evento presente. Clicca su "+ Aggiungi Evento" per iniziare.</p>
-                  ) : (
-                    tempConfig.events.map((ev) => (
-                      <div key={ev.id} className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-200 relative group">
-                        <button 
-                          onClick={() => deleteEvent(ev.id)} 
-                          className="absolute top-6 right-6 text-red-400 hover:text-red-600 w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-sm hover:shadow-md transition"
-                        >
-                          <i className="fas fa-trash-alt"></i>
-                        </button>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Titolo</label>
-                              <input value={ev.title} onChange={(e) => updateEvent(ev.id, {title: e.target.value})} placeholder="Es: Torneo Open Padel" className="w-full p-4 rounded-xl border border-gray-200 font-bold"/>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Data</label>
-                                <input value={ev.date} onChange={(e) => updateEvent(ev.id, {date: e.target.value})} placeholder="Es: 15 Settembre" className="w-full p-4 rounded-xl border border-gray-200"/>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Categoria</label>
-                                <select 
-                                  value={ev.category} 
-                                  onChange={(e) => updateEvent(ev.id, {category: e.target.value})} 
-                                  className="w-full p-4 rounded-xl border border-gray-200 bg-white"
-                                >
-                                  <option value="Torneo">Torneo</option>
-                                  <option value="Clinics">Clinics</option>
-                                  <option value="Social">Social</option>
-                                  <option value="Corsi">Corsi</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Descrizione</label>
-                              <textarea rows={2} value={ev.description} onChange={(e) => updateEvent(ev.id, {description: e.target.value})} placeholder="Dettagli dell'evento..." className="w-full p-4 rounded-xl border border-gray-200"/>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">URL Foto</label>
-                              <input value={ev.imageUrl} onChange={(e) => updateEvent(ev.id, {imageUrl: e.target.value})} placeholder="URL Immagine" className="w-full p-4 rounded-xl border border-gray-200 text-xs text-blue-500"/>
-                            </div>
-                          </div>
+              <div className="space-y-12 animate-in fade-in duration-500">
+                {(['tennis', 'padel'] as const).map(type => (
+                  <div key={type} className="bg-gray-50 p-8 rounded-[2.5rem]">
+                    <h3 className="text-2xl font-black text-[#5C6B89] mb-6 uppercase tracking-tighter">Gallery {type.toUpperCase()}</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                      {tempConfig.courts[type].imageUrls.map((url, i) => (
+                        <div key={i} className="relative aspect-square rounded-2xl overflow-hidden group">
+                          <img src={url} className="w-full h-full object-cover"/>
+                          <button onClick={() => removeImage(type, i)} className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition"><i className="fas fa-trash-alt text-xs"></i></button>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-4">
+                      <input 
+                        className="flex-1 p-5 bg-white rounded-2xl border-none text-sm" 
+                        placeholder="Incolla URL Immagine..."
+                        value={newImgUrl}
+                        onChange={e => setNewImgUrl(e.target.value)}
+                      />
+                      <button onClick={() => addImage(type)} className="bg-[#5C6B89] text-white px-8 py-4 rounded-2xl font-black shadow-lg">AGGIUNGI</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {activeTab === 'footer' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="border-b border-gray-100 pb-4">
-                  <h2 className="text-2xl font-bold text-[#5C6B89]">Contatti & Footer</h2>
-                  <p className="text-gray-400 text-sm">Aggiorna le informazioni di contatto aziendali</p>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Indirizzo Sede</label>
-                    <input value={tempConfig.footer.address} onChange={(e) => setTempConfig(prev => ({...prev, footer: {...prev.footer, address: e.target.value}}))} placeholder="Indirizzo completo" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 font-medium"/>
+            {activeTab === 'schedules' && (
+              <div className="space-y-12 animate-in fade-in duration-500">
+                <h2 className="text-3xl font-black text-[#5C6B89] mb-4 uppercase tracking-tighter">Programmazione Oraria</h2>
+                <p className="text-gray-400 text-sm mb-10">Seleziona gli slot orari attivi per ogni singolo campo. Gli utenti vedranno solo gli slot selezionati qui.</p>
+                
+                {[...tempConfig.courts.tennis.individualCourts, ...tempConfig.courts.padel.individualCourts].map(court => (
+                  <div key={court.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100">
+                    <div className="flex justify-between items-center mb-8">
+                      <h4 className="text-xl font-black text-[#5C6B89] uppercase tracking-tighter">{court.name}</h4>
+                      <span className="text-[10px] font-black bg-white px-4 py-1.5 rounded-full shadow-sm text-gray-400 tracking-widest uppercase">{court.id}</span>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-10 gap-2">
+                      {POSSIBLE_SLOTS.map(slot => (
+                        <button 
+                          key={slot}
+                          onClick={() => toggleSlot(court.id, slot)}
+                          className={`py-3 rounded-xl text-[10px] font-bold transition-all border ${court.slots.includes(slot) ? 'bg-[#A8D695] text-white border-[#A8D695] shadow-md' : 'bg-white text-gray-300 border-gray-50'}`}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Telefono di Contatto</label>
-                    <input value={tempConfig.footer.phone} onChange={(e) => setTempConfig(prev => ({...prev, footer: {...prev.footer, phone: e.target.value}}))} placeholder="Numero di telefono" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 font-medium"/>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Email Ufficiale</label>
-                    <input value={tempConfig.footer.email} onChange={(e) => setTempConfig(prev => ({...prev, footer: {...prev.footer, email: e.target.value}}))} placeholder="Indirizzo Email" className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 font-medium"/>
-                  </div>
-                </div>
+                ))}
               </div>
             )}
           </div>

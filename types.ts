@@ -3,9 +3,7 @@ export interface Court {
   id: string;
   name: string;
   type: 'Tennis' | 'Padel';
-  surface: string;
-  isCovered: boolean;
-  pricePerHour: number;
+  slots: string[];
 }
 
 export interface ChatMessage {
@@ -40,14 +38,16 @@ export interface SiteConfig {
     tennis: {
       title: string;
       description: string;
-      imageUrl: string;
+      imageUrls: string[];
       tags: string[];
+      individualCourts: { id: string, name: string, slots: string[] }[];
     };
     padel: {
       title: string;
       description: string;
-      imageUrl: string;
+      imageUrls: string[];
       tags: string[];
+      individualCourts: { id: string, name: string, slots: string[] }[];
     };
   };
   footer: {
