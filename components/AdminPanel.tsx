@@ -50,19 +50,24 @@ const AdminPanel: React.FC = () => {
     setTempConfig(prev => {
       if (!prev) return null;
       const updated = { ...prev };
-      const findAndToggle = (courts: any[]) => courts.map(c => {
+      
+      const updateCourts = (courts: any[]) => courts.map(c => {
         if (c.id === courtId) {
           const hasSlot = c.slots.includes(slot);
+          const newSlots = hasSlot 
+            ? c.slots.filter((s: string) => s !== slot) 
+            : [...c.slots, slot];
+          
           return {
             ...c,
-            slots: hasSlot ? c.slots.filter((s: string) => s !== slot) : [...c.slots, slot].sort()
+            slots: newSlots.sort((a: string, b: string) => a.localeCompare(b))
           };
         }
         return c;
       });
 
-      updated.courts.tennis.individualCourts = findAndToggle(updated.courts.tennis.individualCourts);
-      updated.courts.padel.individualCourts = findAndToggle(updated.courts.padel.individualCourts);
+      updated.courts.tennis.individualCourts = updateCourts(updated.courts.tennis.individualCourts);
+      updated.courts.padel.individualCourts = updateCourts(updated.courts.padel.individualCourts);
       return updated;
     });
   };
@@ -87,7 +92,6 @@ const AdminPanel: React.FC = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
           <div className="w-full lg:w-80 space-y-3">
             {[
               { id: 'home', icon: 'fa-home', label: 'Dashboard Hero' },
@@ -105,7 +109,6 @@ const AdminPanel: React.FC = () => {
             ))}
           </div>
 
-          {/* Main Content */}
           <div className="flex-1 bg-white rounded-[3rem] shadow-sm p-10 border border-gray-100">
             {activeTab === 'home' && (
               <div className="space-y-8 animate-in fade-in duration-500">
@@ -135,7 +138,7 @@ const AdminPanel: React.FC = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                       {tempConfig.courts[type].imageUrls.map((url, i) => (
                         <div key={i} className="relative aspect-square rounded-2xl overflow-hidden group">
-                          <img src={url} className="w-full h-full object-cover"/>
+                          <img src={url} className="w-full h-full object-cover" alt="gallery item"/>
                           <button onClick={() => removeImage(type, i)} className="absolute top-2 right-2 bg-red-500 text-white w-8 h-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition"><i className="fas fa-trash-alt text-xs"></i></button>
                         </div>
                       ))}
@@ -160,7 +163,7 @@ const AdminPanel: React.FC = () => {
                 <p className="text-gray-400 text-sm mb-10">Seleziona gli slot orari attivi per ogni singolo campo. Gli utenti vedranno solo gli slot selezionati qui.</p>
                 
                 {[...tempConfig.courts.tennis.individualCourts, ...tempConfig.courts.padel.individualCourts].map(court => (
-                  <div key={court.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100">
+                  <div key={court.id} className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 mb-8">
                     <div className="flex justify-between items-center mb-8">
                       <h4 className="text-xl font-black text-[#5C6B89] uppercase tracking-tighter">{court.name}</h4>
                       <span className="text-[10px] font-black bg-white px-4 py-1.5 rounded-full shadow-sm text-gray-400 tracking-widest uppercase">{court.id}</span>
@@ -178,6 +181,12 @@ const AdminPanel: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            
+            {activeTab === 'events' && (
+              <div className="p-8 text-center text-gray-400 font-bold italic">
+                Gestione Eventi disponibile a breve.
               </div>
             )}
           </div>

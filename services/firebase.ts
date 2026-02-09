@@ -2,12 +2,12 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-// Helper per accedere in modo sicuro alle variabili d'ambiente
-const getEnv = (key: string): string | undefined => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[key];
+// Helper robusto per le variabili d'ambiente
+const getEnv = (key: string): string => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] as string;
   }
-  return undefined;
+  return "";
 };
 
 const firebaseConfig = {
@@ -19,9 +19,9 @@ const firebaseConfig = {
   appId: getEnv('FIREBASE_APP_ID')
 };
 
-const isConfigValid = !!firebaseConfig.projectId && firebaseConfig.projectId !== "undefined";
-
 let db: any = null;
+
+const isConfigValid = !!firebaseConfig.projectId && firebaseConfig.projectId !== "undefined";
 
 try {
   if (isConfigValid) {
@@ -29,7 +29,7 @@ try {
     db = getFirestore(app);
     console.log("Firebase initialized successfully.");
   } else {
-    console.warn("Firebase: Configurazione incompleta. L'app funzionerà in modalità locale (fallback).");
+    console.warn("Firebase: Configurazione mancante o incompleta. L'app userà i dati locali di default.");
   }
 } catch (error) {
   console.error("Firebase Initialization Error:", error);
