@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useSite } from '../context/SiteContext';
 
@@ -11,10 +10,16 @@ const Footer: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'password') {
+    // Normalizziamo l'input per evitare errori di battitura (spazi bianchi)
+    const normalizedUser = username.trim().toLowerCase();
+    const normalizedPass = password.trim();
+
+    if (normalizedUser === 'admin' && normalizedPass === 'password') {
+      console.log("Login successful, switching to admin mode...");
       setAdmin(true);
       setIsLoginModalOpen(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Forza lo scroll in alto per vedere la dashboard
+      window.scrollTo({ top: 0, behavior: 'instant' });
     } else {
       setLoginError(true);
       setTimeout(() => setLoginError(false), 3000);
@@ -110,7 +115,7 @@ const Footer: React.FC = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none font-medium"
-                  placeholder="Inserisci username"
+                  placeholder="admin"
                 />
               </div>
               <div>
@@ -121,7 +126,7 @@ const Footer: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-[#A8D695] outline-none font-medium"
-                  placeholder="••••••••"
+                  placeholder="password"
                 />
               </div>
               
